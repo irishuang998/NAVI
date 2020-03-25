@@ -25,6 +25,7 @@ import com.directions.route.Route;
 import com.directions.route.RouteException;
 import com.directions.route.Routing;
 import com.directions.route.RoutingListener;
+
 import com.example.navi_google.R;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GooglePlayServicesNotAvailableException;
@@ -49,6 +50,8 @@ import com.google.android.gms.tasks.Task;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.libraries.places.api.Places;
+
 
 
 
@@ -72,6 +75,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private static final int PLACE_PICKER_REQUEST = 1;
     private ArrayList<LatLng> mLocations;
     private List<Polyline> polylines;
+    protected GoogleApiClient mGoogleApiClient;
     private static final int[] COLORS = new int[]{R.color.colorPrimaryDark,R.color.colorPrimary,R.color.common_google_signin_btn_text_light_pressed,R.color.colorAccent,R.color.primary_dark_material_light};
 
     private EditText mSearchText;
@@ -80,12 +84,16 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_maps);
+        String apiKey = getString(R.string.google_maps_key);
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
+        Places.initialize(getApplicationContext(), getString(R.string.google_maps_key));
         mapFragment.getMapAsync(this);
         getLocationPermission();
-        mSearchText = (EditText) findViewById(R.id.input_search);
+
+
+        mSearchText = findViewById(R.id.input_search);
         this.mLocations = new ArrayList<>();
         this.polylines = new ArrayList<>();
     }
@@ -158,7 +166,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
     }
 
-
+    /**
+     * Get User permission to access their location
+     */
     private void getLocationPermission(){
         Log.d(TAG, "getLocationPermission: getting location permissions");
         String[] permissions = {Manifest.permission.ACCESS_FINE_LOCATION,
@@ -208,7 +218,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     /**
      * This method may need to be modified with sensors from our goggle set up
-     * @return
+     * Get the current user location and store it into the Arraylist.
+     * TODO: we may need to store all the location information in a database and access those information from DB
+     * Because the locational information comes from the sensors. Algorithms may needed for better route calculation (refer to the paper)
      */
     private void getCurrentLocation()
     {
@@ -221,11 +233,11 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                     @Override
                     public void onComplete(@NonNull Task task) {
                         if(task.isSuccessful()){
-                            Log.d(TAG, "onComplete: found Latlng location!");
+                            Log.d(TAG, "getCurrentLocationComplete: found Latlng location!");
                             Location currentLocation = (Location) task.getResult();
                             mLocations.add(new LatLng(currentLocation.getLatitude(), currentLocation.getLongitude()));
                         }else{
-                            Log.d(TAG, "onComplete: current location is null");
+                            Log.d(TAG, "getCurrentLocationComplete: current location is null");
                             Toast.makeText(MapsActivity.this, "unable to get current location", Toast.LENGTH_SHORT).show();
                         }
                     }
@@ -235,6 +247,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             Log.e(TAG, "getDeviceLocation: SecurityException: " + e.getMessage() );
         }
     }
+
+    /**
+     * Get User's initial location when the app is open.
+     */
     private void getDeviceLocation(){
         Log.d(TAG, "getDeviceLocation: getting the devices current location");
 
@@ -265,6 +281,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             Log.e(TAG, "getDeviceLocation: SecurityException: " + e.getMessage() );
         }
     }
+    /**
+     * Private function to move the camera to desired location with LatLng information
+     */
     private void moveCamera(LatLng latLng, float zoom, String place) {
         Log.d(TAG, "moveCamera: moving the camera to: lat: " + latLng.latitude + ", lng: " + latLng.longitude);
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, zoom));
@@ -297,7 +316,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             Log.d(TAG, "geoLocate: found a location: " + address.toString());
 
             moveCamera(new LatLng(address.getLatitude(), address.getLongitude()), DEFAULT_ZOOM, address.getAddressLine(0));
+            getRouteToMarker(mLocations.get(0),new LatLng(address.getLatitude(), address.getLongitude()));
         }
+
     }
 
     private void hideSoftKeyboard(){
@@ -318,7 +339,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         routing.execute();
     }
 
-    
 
     @Override
     public void onRoutingFailure(RouteException e) {
@@ -344,7 +364,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         CameraUpdate zoom = CameraUpdateFactory.zoomTo(16);
 
         mMap.moveCamera(center);
-
 
         if(polylines.size()>0) {
             for (Polyline poly : polylines) {
