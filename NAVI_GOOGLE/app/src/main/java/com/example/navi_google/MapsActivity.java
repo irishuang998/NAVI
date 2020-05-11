@@ -10,6 +10,8 @@ import android.content.pm.PackageManager;
 import androidx.core.app.ActivityCompat;
 import androidx.annotation.NonNull;
 import android.location.*;
+import android.view.View;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.Toast;
@@ -68,8 +70,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1234;
     private static final float DEFAULT_ZOOM = 15f;
     private static final int PLACE_PICKER_REQUEST = 1;
+    private LatLng currentLocation;
+    private LatLng destination;
     private String apiKey;
-    private ArrayList<LatLng> mLocations;
     protected GoogleApiClient mGoogleApiClient;
     private static final int[] COLORS = new int[]{R.color.colorPrimaryDark,R.color.colorPrimary,R.color.common_google_signin_btn_text_light_pressed,R.color.colorAccent,R.color.primary_dark_material_light};
 
@@ -89,8 +92,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         mapFragment.getMapAsync(this);
         getLocationPermission();
 
-        // this.mSearchText = findViewById(R.id.input_search);
-        this.mLocations = new ArrayList<>();
 
         // Di: auto-complete-suggestion set-up
         // Google Places API AutoCompleteFragment
@@ -115,6 +116,23 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 Log.i(TAG, "An error occurred: " + status);
             }
         });
+
+        // Navigation Button
+        Button btn = findViewById(R.id.nav_button);
+        btn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (currentLocation != null && destination != null)
+                {
+                    Log.i(TAG, "Start Navigation");
+                    Toast.makeText(getApplicationContext(), "Starting Navigation", Toast.LENGTH_SHORT)
+                            .show();
+                    startNavigation();
+                }
+                Toast.makeText(getApplicationContext(), "Please enter destination", Toast.LENGTH_LONG)
+                        .show();
+            }
+        });
     }
 
     private void init() {
@@ -126,22 +144,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 mMap = googleMap;
             }
         });
-//        mSearchText.setOnEditorActionListener(new TextView.OnEditorActionListener() {
-//            @Override
-//            public boolean onEditorAction(TextView textView, int actionId, KeyEvent keyEvent) {
-//                if (actionId == EditorInfo.IME_ACTION_SEARCH
-//                        || actionId == EditorInfo.IME_ACTION_DONE
-//                        || keyEvent.getAction() == KeyEvent.ACTION_DOWN
-//                        || keyEvent.getAction() == KeyEvent.KEYCODE_ENTER) {
-//
-//                    //execute our method for searching
-//                    geoLocate();
-//                }
-//
-//                return false;
-//            }
-//        });
         hideSoftKeyboard();
+        currentLocation = new LatLng(40.72944,-73.99111); //default to Cooper address
     }
 
     private void initMap(){
@@ -168,7 +172,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         if (mLocationPermissionsGranted) {
             getDeviceLocation();
-
             if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
                     != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this,
                     Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
@@ -230,37 +233,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
     }
 
-    /**
-     * This method may need to be modified with sensors from our goggle set up
-     * Get the current user location and store it into the Arraylist.
-     * TODO: we may need to store all the location information in a database and access those information from DB
-     * Because the locational information comes from the sensors. Algorithms may needed for better route calculation (refer to the paper)
-     */
-    private void getCurrentLocation()
-    {
-        Log.d(TAG, "getCurrentLocation: getting the devices current LatLng");
-        mFusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this);
-        try{
-            if(mLocationPermissionsGranted){
-                final Task location = mFusedLocationProviderClient.getLastLocation();
-                location.addOnCompleteListener(new OnCompleteListener() {
-                    @Override
-                    public void onComplete(@NonNull Task task) {
-                        if(task.isSuccessful()){
-                            Log.d(TAG, "getCurrentLocationComplete: found Latlng location!");
-                            Location currentLocation = (Location) task.getResult();
-                            mLocations.add(new LatLng(currentLocation.getLatitude(), currentLocation.getLongitude()));
-                        }else{
-                            Log.d(TAG, "getCurrentLocationComplete: current location is null");
-                            Toast.makeText(MapsActivity.this, "unable to get current location", Toast.LENGTH_SHORT).show();
-                        }
-                    }
-                });
-            }
-        }catch (SecurityException e){
-            Log.e(TAG, "getDeviceLocation: SecurityException: " + e.getMessage() );
-        }
-    }
 
     /**
      * Get User's initial location when the app is open.
@@ -269,7 +241,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         Log.d(TAG, "getDeviceLocation: getting the devices current location");
 
         mFusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this);
-
         try{
             if(mLocationPermissionsGranted){
 
@@ -279,11 +250,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                     public void onComplete(@NonNull Task task) {
                         if(task.isSuccessful()){
                             Log.d(TAG, "onComplete: found location!");
-                            Location currentLocation = (Location) task.getResult();
-                            mLocations.add(new LatLng(currentLocation.getLatitude(), currentLocation.getLongitude()));
-                            moveCamera(new LatLng(currentLocation.getLatitude(), currentLocation.getLongitude()),
+                            Location location = (Location) task.getResult();
+                            moveCamera(new LatLng(location.getLatitude(), location.getLongitude()),
                                     DEFAULT_ZOOM, "My Location");
-
+                            currentLocation = new LatLng(location.getLatitude(), location.getLongitude());
                         }else{
                             Log.d(TAG, "onComplete: current location is null");
                             Toast.makeText(MapsActivity.this, "unable to get current location", Toast.LENGTH_SHORT).show();
@@ -329,17 +299,21 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             Address address = list.get(0);
 
             Log.d(TAG, "geoLocate: found a location: " + address.toString());
-
-            moveCamera(new LatLng(address.getLatitude(), address.getLongitude()), DEFAULT_ZOOM, address.getAddressLine(0));
-
-            Routing route = new Routing();
-            route.getRoute(mLocations.get(0), new LatLng(address.getLatitude(), address.getLongitude()), apiKey);
+            destination = new LatLng(address.getLatitude(), address.getLongitude());
+            moveCamera(destination, DEFAULT_ZOOM, address.getAddressLine(0));
         }
 
     }
 
     private void hideSoftKeyboard(){
         this.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
+    }
+
+    private void startNavigation() {
+        getDeviceLocation();
+        Routing route = new Routing();
+        route.getRoute(currentLocation, destination, apiKey);
+
     }
 
 }

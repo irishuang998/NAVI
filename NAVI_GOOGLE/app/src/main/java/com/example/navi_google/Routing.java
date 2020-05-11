@@ -21,6 +21,7 @@ import com.google.gson.JsonObject;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.List;
 import java.util.Vector;
 
 public class Routing extends Application {
@@ -64,7 +65,7 @@ public class Routing extends Application {
         MySingleton.getInstance(mInstance).addToRequestQueue(jsonObjectRequest);
     }
 
-    public int parseResult()
+    public int parseResult(List<LatLng> start_location, List<LatLng> end_location)
     {
         if (mJSONresult.length() == 0) return -1;
         try{
@@ -75,11 +76,10 @@ public class Routing extends Application {
                     route = mJSONresult.getJSONObject("routes");
                 }
                 else {
-                    Log.i(TAG, "parseResult Error: json object is empty");
+                    Log.i(TAG, "parseResult: No route to this place");
                     return -1;
                 }
             }
-
         } catch (JSONException e) {
             Log.i(TAG, "parseResult Error:" + e.toString());
         }
