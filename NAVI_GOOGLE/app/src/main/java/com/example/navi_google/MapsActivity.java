@@ -11,6 +11,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.annotation.NonNull;
 import android.location.*;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.Toast;
 import android.widget.TextView;
 import android.view.KeyEvent;
@@ -18,21 +19,13 @@ import android.view.inputmethod.EditorInfo;
 import android.view.WindowManager;
 import android.widget.AutoCompleteTextView;
 
-
-
-import com.directions.route.AbstractRouting;
-import com.directions.route.Route;
-import com.directions.route.RouteException;
-import com.directions.route.Routing;
-import com.directions.route.RoutingListener;
-
-import com.example.navi_google.R;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GooglePlayServicesNotAvailableException;
 import com.google.android.gms.common.GooglePlayServicesRepairableException;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.PendingResult;
 import com.google.android.gms.common.api.ResultCallback;
+import com.google.android.gms.common.api.Status;
 import com.google.android.gms.maps.CameraUpdate;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.location.FusedLocationProviderClient;
@@ -51,8 +44,10 @@ import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.libraries.places.api.Places;
-
-
+import com.google.android.libraries.places.api.model.Place;
+import com.google.android.libraries.places.api.net.PlacesClient;
+import com.google.android.libraries.places.widget.AutocompleteSupportFragment;
+import com.google.android.libraries.places.widget.listener.PlaceSelectionListener;
 
 
 import java.util.*;
@@ -60,8 +55,10 @@ import java.io.IOException;
 import java.lang.String;
 import java.util.ArrayList;
 
+import static com.example.navi_google.Utils.readEncodedPolyLinePointsFromCSV;
 
-public class MapsActivity extends FragmentActivity implements OnMapReadyCallback, RoutingListener {
+
+public class MapsActivity extends FragmentActivity implements OnMapReadyCallback{
 
     private GoogleMap mMap;
     private FusedLocationProviderClient mFusedLocationProviderClient;
@@ -74,11 +71,26 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private static final float DEFAULT_ZOOM = 15f;
     private static final int PLACE_PICKER_REQUEST = 1;
     private ArrayList<LatLng> mLocations;
-    private List<Polyline> polylines;
     protected GoogleApiClient mGoogleApiClient;
-    private static final int[] COLORS = new int[]{R.color.colorPrimaryDark,R.color.colorPrimary,R.color.common_google_signin_btn_text_light_pressed,R.color.colorAccent,R.color.primary_dark_material_light};
+    private static final int[] COLORS = new int[]{R.color.colorPrimaryDark,R.color.colorPrimary,
+            R.color.common_google_signin_btn_text_light_pressed,
+            R.color.colorAccent,R.color.primary_dark_material_light};
 
-    private EditText mSearchText;
+    // User Location
+    private static LatLng userLatLng;
+
+    /**
+     * Default width of directional arrows.
+     */
+    private static final float DIRECTION_ARROW_WIDTH = 400f;
+
+    /**
+     * Default polyline width.
+     */
+    private static final float POLYLINE_WIDTH = 20f;
+
+
+    PlacesClient placesClient; // instance of a google api places client
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -92,36 +104,40 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         mapFragment.getMapAsync(this);
         getLocationPermission();
 
-
-        mSearchText = findViewById(R.id.input_search);
+        // this.mSearchText = findViewById(R.id.input_search);
         this.mLocations = new ArrayList<>();
-        this.polylines = new ArrayList<>();
+
+        // Google Places API AutoCompleteFragment
+        placesClient = Places.createClient(this);
+
+        final AutocompleteSupportFragment autocompleteSupportFragment =
+                (AutocompleteSupportFragment) getSupportFragmentManager().findFragmentById(R.id.input_search);
+
+        autocompleteSupportFragment.setPlaceFields(Arrays.asList(Place.Field.ID, Place.Field.LAT_LNG, Place.Field.NAME));
+
+        autocompleteSupportFragment.setOnPlaceSelectedListener(new PlaceSelectionListener() {
+            @Override
+            public void onPlaceSelected(@NonNull Place place) {
+                final LatLng LatLng = place.getLatLng();
+                // Toast.makeText(MapsActivity.this, ""+LatLng.latitude, Toast.LENGTH_SHORT).show();
+                Log.i("PlacesApi", "onPlaceSelected: "+LatLng.latitude+"\n"+LatLng.longitude);
+                geoLocate(place.getName());
+            }
+
+            @Override
+            public void onError(@NonNull Status status) {
+                Log.i(TAG, "An error occurred: " + status);
+            }
+        });
     }
 
     private void init() {
         Log.d(TAG, "init: initializing");
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
-
         mapFragment.getMapAsync(new OnMapReadyCallback() {
             @Override
             public void onMapReady(GoogleMap googleMap) {
                 mMap = googleMap;
-            }
-        });
-
-        mSearchText.setOnEditorActionListener(new TextView.OnEditorActionListener() {
-            @Override
-            public boolean onEditorAction(TextView textView, int actionId, KeyEvent keyEvent) {
-                if (actionId == EditorInfo.IME_ACTION_SEARCH
-                        || actionId == EditorInfo.IME_ACTION_DONE
-                        || keyEvent.getAction() == KeyEvent.ACTION_DOWN
-                        || keyEvent.getAction() == KeyEvent.KEYCODE_ENTER) {
-
-                    //execute our method for searching
-                    geoLocate();
-                }
-
-                return false;
             }
         });
         hideSoftKeyboard();
@@ -133,8 +149,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         mapFragment.getMapAsync(MapsActivity.this);
     }
-
-
 
     /**
      * Manipulates the map once available.
@@ -192,7 +206,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
     }
 
-
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         Log.d(TAG, "onRequestPermissionsResult: called.");
@@ -236,6 +249,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                             Log.d(TAG, "getCurrentLocationComplete: found Latlng location!");
                             Location currentLocation = (Location) task.getResult();
                             mLocations.add(new LatLng(currentLocation.getLatitude(), currentLocation.getLongitude()));
+                            userLatLng = new LatLng(currentLocation.getLatitude(), currentLocation.getLongitude();
                         }else{
                             Log.d(TAG, "getCurrentLocationComplete: current location is null");
                             Toast.makeText(MapsActivity.this, "unable to get current location", Toast.LENGTH_SHORT).show();
@@ -281,6 +295,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             Log.e(TAG, "getDeviceLocation: SecurityException: " + e.getMessage() );
         }
     }
+
     /**
      * Private function to move the camera to desired location with LatLng information
      */
@@ -297,10 +312,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         hideSoftKeyboard();
     }
 
-    private void geoLocate(){
+    private void geoLocate(String place_name){
         Log.d(TAG, "geoLocate: geolocating");
 
-        String searchString = mSearchText.getText().toString();
+        String searchString = place_name;
 
         Geocoder geocoder = new Geocoder(MapsActivity.this);
         List<Address> list = new ArrayList<>();
@@ -316,7 +331,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             Log.d(TAG, "geoLocate: found a location: " + address.toString());
 
             moveCamera(new LatLng(address.getLatitude(), address.getLongitude()), DEFAULT_ZOOM, address.getAddressLine(0));
-            getRouteToMarker(mLocations.get(0),new LatLng(address.getLatitude(), address.getLongitude()));
         }
 
     }
@@ -325,76 +339,13 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         this.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
     }
 
-    public void getRouteToMarker(LatLng start, LatLng destLatLng)
+    private void drawPolyline()
     {
-        Log.d(TAG, "getRouteToMarker: getting route to destination");
-        getCurrentLocation();
-        if (start == null) start = mLocations.get(mLocations.size() - 1);
-        Routing routing = new Routing.Builder()
-                .travelMode(AbstractRouting.TravelMode.DRIVING)
-                .withListener(this)
-                .alternativeRoutes(true)
-                .waypoints(start, destLatLng)
-                .build();
-        routing.execute();
+        mMap.addPolyline(new PolylineOptions()
+                .color(getResources().getColor(R.color.colorPolyLineBlue))
+                .width(POLYLINE_WIDTH)
+                .clickable(false)
+                .addAll(readEncodedPolyLinePointsFromCSV(this, "lineBlue")));
     }
 
-
-    @Override
-    public void onRoutingFailure(RouteException e) {
-        Log.d(TAG, "onRoutingFailure: routing failed");
-        if(e != null) {
-            Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
-        }else {
-            Toast.makeText(this, "Something went wrong, Try again", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    @Override
-    public void onRoutingStart() {
-
-    }
-
-    @Override
-    public void onRoutingSuccess(ArrayList<Route> arrayList, int i) {
-        Log.d(TAG, "onRoutingStart: start routing");
-        getCurrentLocation();
-        LatLng start = mLocations.get(mLocations.size() - 1);
-        CameraUpdate center = CameraUpdateFactory.newLatLng(start);
-        CameraUpdate zoom = CameraUpdateFactory.zoomTo(16);
-
-        mMap.moveCamera(center);
-
-        if(polylines.size()>0) {
-            for (Polyline poly : polylines) {
-                poly.remove();
-            }
-        }
-
-        polylines = new ArrayList<>();
-        //add route(s) to the map.
-        for (int j = 0; j <arrayList.size(); j++) {
-
-            //In case of more than 5 alternative routes
-            int colorIndex = j % COLORS.length;
-
-            PolylineOptions polyOptions = new PolylineOptions();
-            polyOptions.color(getResources().getColor(COLORS[colorIndex]));
-            polyOptions.width(10 + j * 3);
-            polyOptions.addAll(arrayList.get(j).getPoints());
-            Polyline polyline = mMap.addPolyline(polyOptions);
-            polylines.add(polyline);
-
-            Toast.makeText(getApplicationContext(),"Route "+ (j+1) +": distance - "+ arrayList.get(j).getDistanceValue()+": duration - "+ arrayList.get(j).getDurationValue(),Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    @Override
-    public void onRoutingCancelled() {
-
-    }
-    private void erasePolylines(){
-        for (Polyline line : polylines) line.remove();
-        polylines.clear();
-    }
 }
