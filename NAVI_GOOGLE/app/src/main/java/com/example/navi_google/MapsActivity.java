@@ -55,8 +55,6 @@ import java.io.IOException;
 import java.lang.String;
 import java.util.ArrayList;
 
-import static com.example.navi_google.Utils.readEncodedPolyLinePointsFromCSV;
-
 
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback{
 
@@ -70,25 +68,12 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1234;
     private static final float DEFAULT_ZOOM = 15f;
     private static final int PLACE_PICKER_REQUEST = 1;
+    private String apiKey;
     private ArrayList<LatLng> mLocations;
     protected GoogleApiClient mGoogleApiClient;
-    private static final int[] COLORS = new int[]{R.color.colorPrimaryDark,R.color.colorPrimary,
-            R.color.common_google_signin_btn_text_light_pressed,
-            R.color.colorAccent,R.color.primary_dark_material_light};
+    private static final int[] COLORS = new int[]{R.color.colorPrimaryDark,R.color.colorPrimary,R.color.common_google_signin_btn_text_light_pressed,R.color.colorAccent,R.color.primary_dark_material_light};
 
-    // User Location
-    private static LatLng userLatLng;
-
-    /**
-     * Default width of directional arrows.
-     */
-    private static final float DIRECTION_ARROW_WIDTH = 400f;
-
-    /**
-     * Default polyline width.
-     */
-    private static final float POLYLINE_WIDTH = 20f;
-
+    // private EditText mSearchText;
 
     PlacesClient placesClient; // instance of a google api places client
 
@@ -96,7 +81,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_maps);
-        String apiKey = getString(R.string.google_maps_key);
+        apiKey = getString(R.string.google_maps_key);
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
@@ -107,6 +92,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         // this.mSearchText = findViewById(R.id.input_search);
         this.mLocations = new ArrayList<>();
 
+        // Di: auto-complete-suggestion set-up
         // Google Places API AutoCompleteFragment
         placesClient = Places.createClient(this);
 
@@ -140,6 +126,21 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 mMap = googleMap;
             }
         });
+//        mSearchText.setOnEditorActionListener(new TextView.OnEditorActionListener() {
+//            @Override
+//            public boolean onEditorAction(TextView textView, int actionId, KeyEvent keyEvent) {
+//                if (actionId == EditorInfo.IME_ACTION_SEARCH
+//                        || actionId == EditorInfo.IME_ACTION_DONE
+//                        || keyEvent.getAction() == KeyEvent.ACTION_DOWN
+//                        || keyEvent.getAction() == KeyEvent.KEYCODE_ENTER) {
+//
+//                    //execute our method for searching
+//                    geoLocate();
+//                }
+//
+//                return false;
+//            }
+//        });
         hideSoftKeyboard();
     }
 
@@ -249,7 +250,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                             Log.d(TAG, "getCurrentLocationComplete: found Latlng location!");
                             Location currentLocation = (Location) task.getResult();
                             mLocations.add(new LatLng(currentLocation.getLatitude(), currentLocation.getLongitude()));
-                            userLatLng = new LatLng(currentLocation.getLatitude(), currentLocation.getLongitude();
                         }else{
                             Log.d(TAG, "getCurrentLocationComplete: current location is null");
                             Toast.makeText(MapsActivity.this, "unable to get current location", Toast.LENGTH_SHORT).show();
@@ -331,21 +331,15 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             Log.d(TAG, "geoLocate: found a location: " + address.toString());
 
             moveCamera(new LatLng(address.getLatitude(), address.getLongitude()), DEFAULT_ZOOM, address.getAddressLine(0));
+
+            Routing route = new Routing();
+            route.getRoute(mLocations.get(0), new LatLng(address.getLatitude(), address.getLongitude()), apiKey);
         }
 
     }
 
     private void hideSoftKeyboard(){
         this.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
-    }
-
-    private void drawPolyline()
-    {
-        mMap.addPolyline(new PolylineOptions()
-                .color(getResources().getColor(R.color.colorPolyLineBlue))
-                .width(POLYLINE_WIDTH)
-                .clickable(false)
-                .addAll(readEncodedPolyLinePointsFromCSV(this, "lineBlue")));
     }
 
 }
