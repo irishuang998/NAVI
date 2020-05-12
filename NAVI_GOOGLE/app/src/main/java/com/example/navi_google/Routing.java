@@ -4,6 +4,8 @@ import android.app.Application;
 import android.content.Context;
 import android.util.Log;
 
+import androidx.lifecycle.MutableLiveData;
+
 import com.android.volley.Cache;
 import com.android.volley.Network;
 import com.android.volley.Request;
@@ -18,9 +20,11 @@ import com.android.volley.toolbox.Volley;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.gson.JsonObject;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Vector;
 
@@ -28,7 +32,6 @@ public class Routing extends Application {
 
     private static final String baseURL = "https://maps.googleapis.com/maps/api/directions/json?";
     private static final String TAG = "Routing";
-    public JSONObject mJSONresult;
     private static Routing mInstance;
 
 
@@ -38,22 +41,25 @@ public class Routing extends Application {
         mInstance = this;
     }
 
-    public Routing()
-    {
-        mJSONresult = new JSONObject();
-    }
 
     public void getRoute(LatLng orig, LatLng dest, String apiKey)
     {
+        String origin = orig.latitude + ","+orig.longitude;
+        String destination = dest.latitude + ","+dest.longitude;
         String requestURL = baseURL +
                 String.format("origin=%s&destination=%s&mode=walking&key=%s",
-                        orig.toString(),dest.toString(), apiKey);
+                        origin,destination, apiKey);
+        Log.i(TAG, "Request URL is:" + requestURL);
+
         JsonObjectRequest jsonObjectRequest = new JsonObjectRequest
                 (Request.Method.GET, requestURL, null, new Response.Listener<JSONObject>() {
                     @Override
                     public void onResponse(JSONObject response) {
                         Log.i(TAG, "getRoute Request response:" + response.toString());
-                        mJSONresult = response;
+                        ArrayList<LatLng> start_location = new ArrayList<>();
+                        ArrayList<LatLng> end_location = new ArrayList<>();
+                        parseResult(response, start_location, end_location);
+                        
                     }
                 }, new Response.ErrorListener() {
                     @Override
@@ -65,25 +71,37 @@ public class Routing extends Application {
         MySingleton.getInstance(mInstance).addToRequestQueue(jsonObjectRequest);
     }
 
-    public int parseResult(List<LatLng> start_location, List<LatLng> end_location)
+
+    public void parseResult(JSONObject mJSONresult, ArrayList<LatLng> start_location, ArrayList<LatLng> end_location)
     {
-        if (mJSONresult.length() == 0) return -1;
         try{
-            JSONObject route;
+            JSONArray routes;
             if (mJSONresult.has("status") && mJSONresult.has("routes"))
             {
-                if (mJSONresult.getString("status") == "OK"){
-                    route = mJSONresult.getJSONObject("routes");
+                if (mJSONresult.getString("status").equals("OK")){
+                    routes = mJSONresult.getJSONArray("routes");
                 }
                 else {
                     Log.i(TAG, "parseResult: No route to this place");
-                    return -1;
+                    return;
+                }
+                JSONObject route = routes.getJSONObject(0);
+                JSONArray Legs = route.getJSONArray("legs");
+                for (int i  = 0; i < Legs.length(); i++)
+                {
+                    JSONObject leg = Legs.getJSONObject(i);
+                    JSONObject orig = leg.getJSONObject("start_location");
+                    JSONObject dest = leg.getJSONObject("end_location");
+                    LatLng start = new LatLng(Double.parseDouble(orig.get("lat").toString()),
+                            Double.parseDouble(orig.get("lng").toString()));
+                    LatLng end = new LatLng(Double.parseDouble(dest.get("lat").toString()),
+                            Double.parseDouble(dest.get("lng").toString()));
+                    start_location.add(start);
+                    end_location.add(end);
                 }
             }
         } catch (JSONException e) {
             Log.i(TAG, "parseResult Error:" + e.toString());
         }
-        return 0;
     }
-
 }

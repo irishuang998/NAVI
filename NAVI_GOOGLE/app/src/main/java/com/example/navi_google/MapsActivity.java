@@ -73,6 +73,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private LatLng currentLocation;
     private LatLng destination;
     private String apiKey;
+    private ArrayList<LatLng> start_location;
+    private ArrayList<LatLng> end_location;
     protected GoogleApiClient mGoogleApiClient;
     private static final int[] COLORS = new int[]{R.color.colorPrimaryDark,R.color.colorPrimary,R.color.common_google_signin_btn_text_light_pressed,R.color.colorAccent,R.color.primary_dark_material_light};
 
@@ -107,13 +109,13 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             public void onPlaceSelected(@NonNull Place place) {
                 final LatLng LatLng = place.getLatLng();
                 // Toast.makeText(MapsActivity.this, ""+LatLng.latitude, Toast.LENGTH_SHORT).show();
-                Log.i("PlacesApi", "onPlaceSelected: "+LatLng.latitude+"\n"+LatLng.longitude);
+                Log.d("PlacesApi", "onPlaceSelected: "+LatLng.latitude+"\n"+LatLng.longitude);
                 geoLocate(place.getName());
             }
 
             @Override
             public void onError(@NonNull Status status) {
-                Log.i(TAG, "An error occurred: " + status);
+                Log.d(TAG, "An error occurred: " + status);
             }
         });
 
@@ -124,13 +126,15 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             public void onClick(View v) {
                 if (currentLocation != null && destination != null)
                 {
-                    Log.i(TAG, "Start Navigation");
+                    Log.d(TAG, "Start Navigation");
                     Toast.makeText(getApplicationContext(), "Starting Navigation", Toast.LENGTH_SHORT)
                             .show();
                     startNavigation();
                 }
-                Toast.makeText(getApplicationContext(), "Please enter destination", Toast.LENGTH_LONG)
-                        .show();
+                else {
+                    Toast.makeText(getApplicationContext(), "Please enter destination", Toast.LENGTH_LONG)
+                            .show();
+                }
             }
         });
     }
@@ -146,6 +150,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         });
         hideSoftKeyboard();
         currentLocation = new LatLng(40.72944,-73.99111); //default to Cooper address
+        start_location = new ArrayList<LatLng>();
+        end_location = new ArrayList<LatLng>();
     }
 
     private void initMap(){
@@ -312,8 +318,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private void startNavigation() {
         getDeviceLocation();
         Routing route = new Routing();
-        route.getRoute(currentLocation, destination, apiKey);
-
+        route.getRoute(this.currentLocation, this.destination, apiKey);
     }
-
 }
