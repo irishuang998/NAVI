@@ -4,8 +4,6 @@ import android.app.Application;
 import android.content.Context;
 import android.util.Log;
 
-import androidx.lifecycle.MutableLiveData;
-
 import com.android.volley.Cache;
 import com.android.volley.Network;
 import com.android.volley.Request;
@@ -59,7 +57,7 @@ public class Routing extends Application {
                         ArrayList<LatLng> start_location = new ArrayList<>();
                         ArrayList<LatLng> end_location = new ArrayList<>();
                         parseResult(response, start_location, end_location);
-                        
+
                     }
                 }, new Response.ErrorListener() {
                     @Override
