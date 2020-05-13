@@ -57,7 +57,6 @@ public class Routing extends Application {
                         ArrayList<LatLng> start_location = new ArrayList<>();
                         ArrayList<LatLng> end_location = new ArrayList<>();
                         parseResult(response, start_location, end_location);
-
                     }
                 }, new Response.ErrorListener() {
                     @Override
@@ -85,11 +84,13 @@ public class Routing extends Application {
                 }
                 JSONObject route = routes.getJSONObject(0);
                 JSONArray Legs = route.getJSONArray("legs");
-                for (int i  = 0; i < Legs.length(); i++)
+
+                JSONArray Steps = Legs.getJSONObject(0).getJSONArray("steps");
+                for (int i  = 0; i < Steps.length(); i++)
                 {
-                    JSONObject leg = Legs.getJSONObject(i);
-                    JSONObject orig = leg.getJSONObject("start_location");
-                    JSONObject dest = leg.getJSONObject("end_location");
+                    JSONObject step = Steps.getJSONObject(i);
+                    JSONObject orig = step.getJSONObject("start_location");
+                    JSONObject dest = step.getJSONObject("end_location");
                     LatLng start = new LatLng(Double.parseDouble(orig.get("lat").toString()),
                             Double.parseDouble(orig.get("lng").toString()));
                     LatLng end = new LatLng(Double.parseDouble(dest.get("lat").toString()),
